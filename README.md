@@ -31,15 +31,26 @@ Start with the closest driving or parking scenario, adjust the camera and visual
 | Driving scenario | Road, elevated road, junction and ramp |
 | Parking scenario | Indoor and outdoor parking |
 | Appearance | Light and dark modes for day/night interface exploration |
-| Road layout | Straight roads; 2, 4 or 6 lanes |
+| Road layout | Road with 2, 4 or 6 lanes; Highway with two travel lanes each way, central divider and 3 m outer safety lanes |
 | Junction and ramp | Crossroads or T-junction; exit or merge |
-| Camera | Low/high road and ramp views, and scenario-specific parking viewpoints, including bird's-eye views |
+| Camera | Low/high road and ramp views; Driver on Road and Elevated road; scenario-specific parking viewpoints, including bird's-eye views |
+| Continuous driving | Live speed input from 0–200 km/h, Play/Pause, Reset and distance travelled on Road and Elevated road, including Highway |
 | Scene elements | Vehicle, buildings, trees, waterfront and roadworks, where supported by the selected scenario |
 | Export | 1920 × 1080 PNG |
 
 Camera changes animate through the 3D scene; other options use short transitions. Reduced-motion preferences are respected. Elevated roads and ramp mainlines have separated opposing carriageways; the elevated deck sits 8.5 m above ground with ground-level side streets and bridge supports.
 
 Options follow the selected scenario. Light and dark modes provide visual themes for design exploration, rather than a physical simulation of changing daylight. On mobile, the navigation expands within the page and stays open while comparing scenes.
+
+## Continuous driving
+
+Choose Road or Elevated road, set the speed with the number field or slider, then press Play. Changing speed while playing immediately changes the rate of travel; 0 km/h holds the scene still. Lane markings and roadside scenery move according to distance in metres. A fixed, seeded pool varies building dimensions, roadside setbacks and tree placement as sites recycle. Reset returns the distance and scenery sequence to their start while keeping the current speed and playback selection. Junctions, ramps and parking keep their finite compositions and existing camera controls.
+
+Within Road, choose Layout → Highway for four travel lanes total: two in each direction, separated by a central divider, with a 3 m safety lane on each outer side. Lane dividers are dashed white and edges are solid white. The Highway lane count is fixed. Driver places the camera in a left-hand driver's seat, framed by A pillars, roof trim and a bonnet, without a steering wheel, dashboard or instrument cluster. It hides the exterior vehicle and its switch; Low and High restore the switch and the saved vehicle setting.
+
+Playback suspends while the tab is hidden, Credits is open or a PNG is being exported, and resumes when the scene becomes active again if Play remains selected. Export captures a frozen 1920 × 1080 frame. URL state preserves speed and playback selection; reduced-motion preferences block URL autoplay, while explicit Play remains available.
+
+External speed sources can call `window.driveScene.setSpeedKmh(value)` while the page is open, alongside `play()`, `pause()`, `reset()` and `getState()`. No vehicle or telemetry connection is configured by default. See [the implementation and verification notes](docs/DRIVING.md) for the API and test results.
 
 ## Scene preview
 

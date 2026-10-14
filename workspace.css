@@ -1,4 +1,19 @@
 /* One shared shell aligns the brand, navigation, preview and footer. */
+/* Driving controls reuse the editor's surfaces, spacing and focus treatment. */
+.driving-controls { margin-top: 20px; }
+.speed-heading, .driving-readout { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.speed-heading > label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.speed-value { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.speed-value input { width: 64px; min-height: 40px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--ui-radius); background: var(--control-surface); color: var(--text); font: inherit; font-variant-numeric: tabular-nums; }
+.speed-range { display: block; width: 100%; margin: 8px 0 12px; min-height: 28px; accent-color: var(--text); cursor: pointer; }
+.driving-actions { display: flex; gap: 8px; }
+.driving-actions button { flex: 1; min-height: 44px; border-radius: var(--ui-radius); background: var(--control-surface); color: var(--text); font-size: 13px; }
+.driving-actions button:hover { background: var(--control-hover); }
+.driving-actions button[aria-pressed=true] { background: var(--text); color: var(--page); }
+.driving-controls :is(button,input):focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.driving-readout { margin-top: 8px; font-size: 12px; line-height: 20px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.control-note { margin: 0 0 16px; font-size: 12px; line-height: 18px; color: var(--text-secondary); }
+.workspace .scene-options .view-segments button:disabled { cursor: default; opacity: .6; }
 :root {
   --page: #f6f7f8;
   --control-height: 48px;

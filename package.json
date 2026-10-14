@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node scripts/test-driving.mjs",
     "start": "python3 -m http.server 8000",
     "prepare:vehicle": "node scripts/prepare-vehicle.mjs",
     "prepare:startup": "node scripts/prepare-startup-vehicle.mjs",

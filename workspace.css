@@ -13,6 +13,19 @@
 .driving-controls :is(button,input):focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 .driving-readout { margin-top: 8px; font-size: 12px; line-height: 20px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .control-note { margin: 0 0 16px; font-size: 12px; line-height: 18px; color: var(--text-secondary); }
+.speed-feed-controls { margin: 16px 0; }
+.speed-feed-controls > label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+.speed-feed-connection { display: flex; gap: 8px; }
+.speed-feed-connection input { min-width: 0; width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--ui-radius); background: var(--control-surface); color: var(--text); font: inherit; font-size: 12px; }
+.speed-feed-connection input::placeholder { color: var(--text-secondary); }
+.speed-feed-connection button { flex-shrink: 0; min-height: 44px; padding: 8px 12px; border-radius: var(--ui-radius); background: var(--control-surface); color: var(--text); font-size: 12px; }
+.speed-feed-connection button:hover { background: var(--control-hover); }
+.speed-feed-controls .control-note { margin: 8px 0 0; overflow-wrap: anywhere; }
+.driving-controls input:disabled { opacity: .65; cursor: default; }
+.suspension-control { margin-top: 16px; }
+.suspension-control output { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.suspension-control .speed-range { margin-bottom: 0; }
+.suspension-control .control-note { margin-bottom: 0; }
 .workspace .scene-options .view-segments button:disabled { cursor: default; opacity: .6; }
 :root {
   --page: #f6f7f8;

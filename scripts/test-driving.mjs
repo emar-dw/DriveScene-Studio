@@ -37,6 +37,22 @@ try{
  await shot(page,'road-desktop');
  await page.locator('#driving-speed').fill('90');await page.locator('#driving-play').click();await page.waitForTimeout(1000);
  const moving=await page.evaluate(()=>driveScene.getState());assert.ok(moving.distanceMetres>15&&moving.distanceMetres<40);
+ const sliderPlayback=await page.evaluate(async()=>{
+  const slider=document.querySelector('#driving-speed-range'),deltas=[];
+  let previous=driveScene.getState().distanceMetres,frame=0;
+  await new Promise(resolve=>{
+   const sample=()=>{
+    const distance=driveScene.getState().distanceMetres;
+    if(frame>0)deltas.push(distance-previous);previous=distance;
+    for(let update=0;update<4;update++){slider.value=String(90+frame%40+update);slider.dispatchEvent(new Event('input',{bubbles:true}));}
+    if(++frame<60)requestAnimationFrame(sample);else resolve();
+   };requestAnimationFrame(sample);
+  });
+  slider.dispatchEvent(new Event('change',{bubbles:true}));
+  return {frames:deltas.length,stalledFrames:deltas.filter(d=>d<=0).length,distanceMetres:deltas.reduce((a,b)=>a+b,0),urlSpeed:Number(new URLSearchParams(location.search).get('speed')),speed:driveScene.getState().speedKmh};
+ });
+ assert.equal(sliderPlayback.stalledFrames,0);assert.ok(sliderPlayback.distanceMetres>10);assert.equal(sliderPlayback.urlSpeed,sliderPlayback.speed);results.push({sliderPlayback});
+ await page.evaluate(()=>driveScene.setSpeedKmh(90));
  await page.locator('#driving-play').click();const paused=await page.evaluate(()=>driveScene.getState());await page.waitForTimeout(250);
  assert.equal((await page.evaluate(()=>driveScene.getState())).distanceMetres,paused.distanceMetres);
  await page.locator('#driving-reset').click();assert.equal((await page.evaluate(()=>driveScene.getState())).distanceMetres,0);

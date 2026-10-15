@@ -1,6 +1,7 @@
 import {playThemeSound} from './theme-sound.js';
 import {World} from './world.js';
 import {Driving,drivingIds} from './driving.js';
+import {SpeedFeed} from './speed-feed.js';
 import {structures,legacyScenes} from './structures.js';
 import {createVehicle,createVehicleProxy} from './vehicle.js';
 import {disposeVehicle} from './dispose-vehicle.js';
@@ -46,14 +47,16 @@ let navDesign=comparingNav&&['1','2','3'].includes(query.get('nav'))?query.get('
 const optionIds=['buildings','waterfront','trees','vehicle','roadworks'];
 let vehicleReady=false,vehicleFullReady=false,junctionRequested=false;
 let drivingReadoutAt=0;
-function drivingState(){return {speedKmh:world.driving.speed,playing:world.driving.playing,running:world.driving.running,distanceMetres:world.driving.distance,supported:world.driving.supported};}
+function drivingState(){return {speedKmh:world.driving.speed,playing:world.driving.playing,running:world.driving.running,distanceMetres:world.driving.distance,supported:world.driving.supported,suspension:world.driving.suspension.getState(),speedInput:world.speedFeed?.connected?'websocket':'manual',speedFeed:world.speedFeed?.getState()};}
 function syncDrivingControls(force=false){
  const drive=world.driving;if(!drive)return;
+ $('driving-speed').disabled=$('driving-speed-range').disabled=!!world.speedFeed?.active;
  const supported=selected==='road'||selected==='elevated';$('driving-controls').hidden=!supported;
  const highway=selected==='road'&&preferences.get('road').roadPreset==='highway';$('highway-description').hidden=!highway;
  for(const button of document.querySelectorAll('[data-road-preset]'))button.setAttribute('aria-pressed',String(button.dataset.roadPreset===(highway?'highway':'urban')));
  for(const button of document.querySelectorAll('[data-road=laneCount]')){button.disabled=highway;button.setAttribute('aria-pressed',String(Number(button.dataset.value)===(highway?4:preferences.get('road').laneCount)));}
  if(document.activeElement!==$('driving-speed'))$('driving-speed').value=String(drive.speed);$('driving-speed-range').value=String(drive.speed);
+ $('suspension-stiffness').value=String(drive.suspension.stiffness);$('suspension-stiffness-value').value=`${drive.suspension.stiffness}%`;
  $('driving-play').textContent=drive.playing?'Pause':'Play';$('driving-play').setAttribute('aria-pressed',String(drive.playing));
  const label=drive.speed===0?'Stopped':drive.running?'Driving':drive.playing?'Paused':drive.distance>0?'Paused':'Ready';
  if($('driving-status').textContent!==label)$('driving-status').textContent=label;
@@ -66,8 +69,19 @@ await new Promise(resolve=>setTimeout(resolve,0));
 performance.mark('studio-renderer-start');
 const world=await World.create($('scene-canvas'),createVehicleProxy(),{width:previewResolution()[0],height:previewResolution()[1],measure:query.has("perf")});
 world.initializingScene=true;
-world.driving=new Driving(world,{speed:query.has('speed')?query.get('speed'):60,onChange:()=>syncDrivingControls()});
-window.driveScene=Object.freeze({setSpeedKmh:value=>{const speed=world.driving.setSpeed(value);syncDrivingControls(true);updateURL();return speed;},play:()=>{world.driving.play();syncDrivingControls(true);updateURL();},pause:()=>{world.driving.pause();syncDrivingControls(true);updateURL();},reset:()=>{world.driving.reset();syncDrivingControls(true);},getState:drivingState});
+world.driving=new Driving(world,{speed:query.has('speed')?query.get('speed'):60,stiffness:query.has('stiffness')?query.get('stiffness'):50,onChange:()=>syncDrivingControls()});
+world.speedFeed=new SpeedFeed({onSpeed:value=>window.driveScene.setSpeedKmh(value),onState:()=>syncSpeedFeedControls(),onLost:()=>window.driveScene.pause()});
+function syncSpeedFeedControls(){
+ const feed=world.speedFeed,st=feed.getState();
+ $('speed-feed-url').disabled=feed.active;$('speed-feed-connect').textContent=feed.active?'Disconnect':'Connect';
+ if(feed.active)$('speed-feed-url').value=st.url;
+ const label=st.error||({idle:'Manual speed',connecting:'Connecting…',connected:st.received?'Receiving speed · km/h':'Connected · waiting for speed',disconnected:'Disconnected · driving paused'}[st.status]);
+ if($('speed-feed-status').textContent!==label)$('speed-feed-status').textContent=label;
+ syncDrivingControls(true);
+}
+let speedURLTimer=0;
+function scheduleSpeedURL(){clearTimeout(speedURLTimer);speedURLTimer=setTimeout(updateURL,200);}
+window.driveScene=Object.freeze({setSpeedKmh:value=>{const speed=world.driving.setSpeed(value);syncDrivingControls(true);scheduleSpeedURL();return speed;},setSuspensionStiffness:value=>{const stiffness=world.driving.setSuspensionStiffness(value);scheduleSpeedURL();return stiffness;},play:()=>{world.driving.play();syncDrivingControls(true);updateURL();},pause:()=>{world.driving.pause();syncDrivingControls(true);updateURL();},reset:()=>{world.driving.reset();syncDrivingControls(true);},getState:drivingState,connectSpeedFeed:url=>world.speedFeed.connect(url),disconnectSpeedFeed:()=>world.speedFeed.disconnect()});
 if(query.get('drive')==='1'&&!matchMedia('(prefers-reduced-motion: reduce)').matches)world.driving.play();
 performance.measure('studio-renderer','studio-renderer-start');
 await new Promise(resolve=>setTimeout(resolve,0));
@@ -81,7 +95,7 @@ const referenceView=null;let referenceVehicle=true;
 function currentFrame(){return $('scene-canvas');}
 function active(){return structures.find(s=>s.key===selected);}
 function state(){const st={...preferences.get(selected),mode};for(const key of ['buildings','waterfront','trees','roadworks'])st[key]=!!active()[key]&&!!st[key];if(selected==='road'){if(st.roadPreset==='highway'){st.id='20';st.laneCount=4;st.waterfront=false;st.roadworks=false;}else st.id=st.laneCount===2?'09':'02';}return st;}
-function updateURL(){const q=new URLSearchParams();q.set('scene',selected==='reference'?'reference':state().id);q.set('mode',mode);q.set('speed',world.driving.speed);if(world.driving.playing)q.set('drive','1');if(selected==='road')q.set('lanes',state().laneCount);if(['road','ramp','junction','elevated'].includes(selected))q.set('view',state().cameraView);if(selected==='junction')q.set('position',state().junctionPosition);for(const key of optionIds)q.set(key,state()[key]?'1':'0');if(comparingNav){q.set('study','1');q.set('nav',navDesign);}if(query.has('motion'))q.set('motion',query.get('motion'));if(document.getElementById('credits-view')&&!document.getElementById('credits-view').hidden)q.set('page','credits');history.replaceState(null,'',`?${q}`);}
+function updateURL(){clearTimeout(speedURLTimer);const q=new URLSearchParams();q.set('scene',selected==='reference'?'reference':state().id);q.set('mode',mode);q.set('speed',world.driving.speed);q.set('stiffness',world.driving.suspension.stiffness);if(world.driving.playing)q.set('drive','1');if(selected==='road')q.set('lanes',state().laneCount);if(['road','ramp','junction','elevated'].includes(selected))q.set('view',state().cameraView);if(selected==='junction')q.set('position',state().junctionPosition);for(const key of optionIds)q.set(key,state()[key]?'1':'0');if(comparingNav){q.set('study','1');q.set('nav',navDesign);}if(query.has('motion'))q.set('motion',query.get('motion'));if(document.getElementById('credits-view')&&!document.getElementById('credits-view').hidden)q.set('page','credits');history.replaceState(null,'',`?${q}`);}
 const sceneButtons=new Map(),sceneGroups=new Map(),categoryButtons=new Map();
 const groupSelection=new Map([['open',first.group==='open'?selected:'road'],['closed',first.group==='closed'?selected:'parking']]);
 const folderSVG='<svg class="folder-icon" width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.5 6V4.75A1.5 1.5 0 0 1 4 3.25h3.1c.4 0 .78.16 1.06.44l1.62 1.62a.75.75 0 0 0 .53.22H16A1.5 1.5 0 0 1 17.5 7.03v8.22A1.5 1.5 0 0 1 16 16.75H4a1.5 1.5 0 0 1-1.5-1.5V6Z" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -208,7 +222,7 @@ function render(animate=false,themeWipe=false,motion='scene'){
  if(!vehicleReady&&!isReference){const mask=optionIds.reduce((bits,key,i)=>bits+(st[key]?1<<i:0),0),lanes=selected==='road'?st.laneCount:0,view=['road','ramp','junction','elevated'].includes(selected)&&st.cameraView==='high'?'high':'low',posterId=st.id==='20'?'02':st.id;document.documentElement.style.setProperty('--startup-frame',`url("assets/startup/states/${posterId}-${lanes}-${view}-${mode}-${mask}.webp?v=139")`);}
  const deferred=animate&&!cameraMotion&&!environmentMotion&&!layoutMotion&&!structureMotion&&!isReference&&vehicleReady;preview.dataset.renderPending=String(deferred);
  if(isReference)referenceView.render(mode,referenceVehicle);else if(!world.initializingScene&&(vehicleReady||!st.vehicle))world.update({...st,vehicle:vehicleReady&&st.vehicle},{cameraMotion,environmentMotion,layoutMotion,structureMotion,deferRender:deferred});
- $('scene-canvas').hidden=false;$('reference-image').hidden=true;displayedReference=isReference;
+ $('scene-canvas').hidden=false;displayedReference=isReference;
  $('reference').setAttribute('aria-current',isReference);
  $('scene-title').textContent=isReference?'Visual key':s.name;
  $('scene-canvas').setAttribute('aria-label',isReference?`Visual key, ${mode}, BMW vehicle`:`${s.name}, ${mode}, ${optionIds.filter(k=>st[k]).join(', ')}`);
@@ -275,7 +289,13 @@ new ResizeObserver(()=>{moveSelection();}).observe($('scenes'));
 for(const b of $('road-controls').querySelectorAll('[data-road]'))b.addEventListener('click',()=>{const key=b.dataset.road,value=key==='laneCount'?Number(b.dataset.value):b.dataset.value;if(preferences.get('road')[key]===value)return;preferences.get('road')[key]=value;requestRender(key==='cameraView'?'camera':'layout');});
 for(const button of document.querySelectorAll('[data-road-preset]'))button.addEventListener('click',()=>{const preference=preferences.get('road');if(preference.roadPreset===button.dataset.roadPreset)return;preference.roadPreset=button.dataset.roadPreset;requestRender('scene');});
 for(const input of [$('driving-speed'),$('driving-speed-range')])input.addEventListener('input',()=>{if(input.value==='')return;window.driveScene.setSpeedKmh(input.value);});
-$('driving-speed').addEventListener('change',()=>{window.driveScene.setSpeedKmh($('driving-speed').value);$('driving-speed').value=String(world.driving.speed);});
+$('driving-speed').addEventListener('change',()=>{window.driveScene.setSpeedKmh($('driving-speed').value);$('driving-speed').value=String(world.driving.speed);updateURL();});
+$('driving-speed-range').addEventListener('change',updateURL);
+$('suspension-stiffness').addEventListener('input',event=>window.driveScene.setSuspensionStiffness(event.target.value));
+$('suspension-stiffness').addEventListener('change',updateURL);
+$('speed-feed-connect').addEventListener('click',()=>world.speedFeed.active?world.speedFeed.disconnect():world.speedFeed.connect($('speed-feed-url').value||$('speed-feed-url').placeholder));
+$('speed-feed-url').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();$('speed-feed-connect').click();}});
+window.addEventListener('pagehide',()=>world.speedFeed.disconnect());
 $('driving-play').addEventListener('click',()=>world.driving.playing?window.driveScene.pause():window.driveScene.play());
 $('driving-reset').addEventListener('click',()=>window.driveScene.reset());
 for(const button of $('ramp-views').querySelectorAll('button'))button.addEventListener('click',()=>{if(preferences.get(selected).cameraView===button.dataset.rampView)return;preferences.get(selected).cameraView=button.dataset.rampView;requestRender('camera');});

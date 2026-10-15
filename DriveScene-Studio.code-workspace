@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "DriveScene Studio",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true,
+    "editor.tabSize": 2
+  }
+}

@@ -51,8 +51,8 @@ function drivingState(){return {speedKmh:world.driving.speed,playing:world.drivi
 function syncDrivingControls(force=false){
  const drive=world.driving;if(!drive)return;
  $('driving-speed').disabled=$('driving-speed-range').disabled=!!world.speedFeed?.active;
- const supported=selected==='road'||selected==='elevated';$('driving-controls').hidden=!supported;
- const highway=selected==='road'&&preferences.get('road').roadPreset==='highway';$('highway-description').hidden=!highway;
+ const supported=selected==='road'||selected==='elevated';$('driving-controls').hidden=$('driving-transport').hidden=!supported;
+ const highway=selected==='road'&&preferences.get('road').roadPreset==='highway';
  for(const button of document.querySelectorAll('[data-road-preset]'))button.setAttribute('aria-pressed',String(button.dataset.roadPreset===(highway?'highway':'urban')));
  for(const button of document.querySelectorAll('[data-road=laneCount]')){button.disabled=highway;button.setAttribute('aria-pressed',String(Number(button.dataset.value)===(highway?4:preferences.get('road').laneCount)));}
  if(document.activeElement!==$('driving-speed'))$('driving-speed').value=String(drive.speed);$('driving-speed-range').value=String(drive.speed);

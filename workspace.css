@@ -1,6 +1,13 @@
 /* One shared shell aligns the brand, navigation, preview and footer. */
 /* Driving controls reuse the editor's surfaces, spacing and focus treatment. */
 .driving-controls { margin-top: 20px; }
+.driving-transport { margin-top: 16px; }
+.driving-transport-row { display: grid; grid-template-columns: auto minmax(80px, 1fr) auto auto; align-items: center; gap: 16px; }
+.driving-transport-row > label { color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+.driving-transport-row > .speed-range { min-width: 0; margin: 0; }
+.driving-transport .speed-value input { min-height: 44px; }
+.driving-transport .driving-actions button { min-width: 72px; padding-inline: 12px; }
+.driving-transport :is(button,input) { scroll-margin-top: calc(var(--header-height) + 12px); scroll-margin-bottom: 12px; }
 .speed-heading, .driving-readout { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .speed-heading > label { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
 .speed-value { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
@@ -10,7 +17,7 @@
 .driving-actions button { flex: 1; min-height: 44px; border-radius: var(--ui-radius); background: var(--control-surface); color: var(--text); font-size: 13px; }
 .driving-actions button:hover { background: var(--control-hover); }
 .driving-actions button[aria-pressed=true] { background: var(--text); color: var(--page); }
-.driving-controls :is(button,input):focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.driving-controls :is(button,input):focus-visible, .driving-transport :is(button,input):focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 .driving-readout { margin-top: 8px; font-size: 12px; line-height: 20px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .control-note { margin: 0 0 16px; font-size: 12px; line-height: 18px; color: var(--text-secondary); }
 .speed-feed-controls { margin: 16px 0; }
@@ -21,7 +28,7 @@
 .speed-feed-connection button { flex-shrink: 0; min-height: 44px; padding: 8px 12px; border-radius: var(--ui-radius); background: var(--control-surface); color: var(--text); font-size: 12px; }
 .speed-feed-connection button:hover { background: var(--control-hover); }
 .speed-feed-controls .control-note { margin: 8px 0 0; overflow-wrap: anywhere; }
-.driving-controls input:disabled { opacity: .65; cursor: default; }
+.driving-controls input:disabled, .driving-transport input:disabled { opacity: .65; cursor: default; }
 .suspension-control { margin-top: 16px; }
 .suspension-control output { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
 .suspension-control .speed-range { margin-bottom: 0; }
@@ -68,6 +75,14 @@ main {
 .preview-shell {
   position: relative;
   padding-bottom: 12px;
+  container-type: inline-size;
+}
+@container (max-width:480px) {
+  .driving-transport-row { grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; }
+  .driving-transport-row > .speed-range { grid-column: 1 / -1; grid-row: 2; }
+  .driving-transport .speed-value { justify-self: start; }
+  .driving-transport .driving-actions { justify-self: end; }
+  .driving-transport .driving-actions button { min-width: 64px; }
 }
 .workspace .preview { border-radius: var(--ui-radius); background-color: transparent; }
 .workspace .preview[aria-busy="false"] { background-image: none; }
@@ -145,6 +160,7 @@ main {
   box-shadow: 0 1px 3px rgb(0 0 0 / .06), 0 1px 1px rgb(0 0 0 / .03);
 }
 :root[data-theme=dark] .workspace .scene-options .view-segments::before { box-shadow: none; }
+.workspace .scene-options .view-segments:has(button[data-road=laneCount]:disabled)::before { background: var(--page); box-shadow: none; }
 .workspace .scene-options .view-segments button,
 .workspace .scene-options .road-option .view-segments button {
   flex: 1;
@@ -241,7 +257,7 @@ header:not(.credits-open) .header-backdrop { bottom: 0; }
 }
 @media (max-width:760px) {
   :root { --mobile-gutter: 20px; }
-  main { padding-top: 12px; }
+  main { width: 100%; padding-top: 12px; }
   .workspace { max-width: none; }
   .preview-shell { padding-bottom: 14px; }
   .workspace .scene-options #road-controls,

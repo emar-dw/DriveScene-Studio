@@ -35,6 +35,7 @@ Start with the closest driving or parking scenario, adjust the camera and visual
 | Junction and ramp | Crossroads or T-junction; exit or merge |
 | Camera | Low/high road and ramp views; Driver on Road and Elevated road; scenario-specific parking viewpoints, including bird's-eye views |
 | Continuous driving | Live speed input from 0–300 km/h, Play/Pause, Reset and distance travelled on Road and Elevated road, including Highway |
+| Suspension stiffness | 0–100%, default 50%; higher values reduce acceleration/braking pitch, 100% keeps the body rigid |
 | Simulator speed input | WebSocket endpoint with Connect/Disconnect; plain numeric or JSON speed samples in km/h |
 | Scene elements | Vehicle, buildings, trees, waterfront and roadworks, where supported by the selected scenario |
 | Export | 1920 × 1080 PNG |
@@ -45,7 +46,9 @@ Options follow the selected scenario. Light and dark modes provide visual themes
 
 ## Continuous driving
 
-Choose Road or Elevated road, set the speed with the number field or slider, then press Play. Changing speed while playing immediately changes the rate of travel; 0 km/h holds the scene still. Lane markings and roadside scenery move according to distance in metres. A fixed, seeded pool varies building dimensions, roadside setbacks and tree placement as sites recycle. Reset returns the distance and scenery sequence to their start while keeping the current speed and playback selection. Junctions, ramps and parking keep their finite compositions and existing camera controls.
+Choose Road or Elevated road, set the speed with the number field or slider under the preview, then press Play. Speed, Play/Pause and Reset share one row when space permits; on narrow previews, the slider spans a second row. Status and distance sit below. Changing speed while playing immediately changes the rate of travel; 0 km/h stops travel while any suspension response settles. Lane markings and roadside scenery move according to distance in metres. A fixed, seeded pool varies building dimensions, roadside setbacks and tree placement as sites recycle. Reset returns the distance and scenery sequence to their start and levels the body while keeping the current speed and playback selection. Junctions, ramps and parking keep their finite compositions and existing camera controls.
+
+Speed increases briefly tip the body and Driver camera nose up, while speed reductions tip them nose down. A progressive spring adds resistance as dive grows, with a smooth bump-stop region near the travel limit and stronger rebound damping for a controlled return to level; wheels stay planted. **Suspension stiffness**, in scene settings alongside the WebSocket feed controls, controls the amount: 0% is softest, 50% is the default and 100% is rigid. This is a restrained visual response, not calibrated vehicle physics. Pausing or exporting freezes the pose; Reset levels it. The URL restores stiffness without restoring a transient pitch.
 
 Within Road, choose Layout → Highway for four travel lanes total: two in each direction, separated by a central divider, with a 3 m safety lane on each outer side. Lane dividers are dashed white and edges are solid white. The Highway lane count is fixed. Driver places the camera in a left-hand driver's seat inside a closed cabin shell, with solid door panels, a floor and body enclosure around intentionally clear window openings. Slim tapered A pillars connect to the roof and window belts; seals and a shaped bonnet frame the road view. The cabin has no steering wheel, dashboard or instrument cluster. It hides the exterior vehicle and its switch; Low and High restore the switch and the saved vehicle setting.
 
@@ -55,7 +58,7 @@ For a simulator or native application, enter its WebSocket endpoint under **WebS
 
 An optional local relay is included. After `npm install`, run `npm run speed-feed -- 90` in a second terminal alongside `npm run dev`. Connect both the simulator and the browser to `ws://127.0.0.1:9001`; the simulator sends speed samples and the relay forwards them to the scene. The relay starts at 90 km/h and sends the latest speed to newly connected clients. A native application can also host its own WebSocket endpoint. UDP/OSC sources can use a native bridge that forwards their speed as WebSocket text.
 
-Use the locally served HTTP app for the local relay. Access from a remote HTTPS page to a local endpoint depends on browser local-network permissions; secure hosted endpoints should use `wss://`. External sources running in the page can also call `window.driveScene.setSpeedKmh(value)`, alongside `play()`, `pause()`, `reset()`, `connectSpeedFeed(url)`, `disconnectSpeedFeed()` and `getState()`. No connection is configured automatically. See [the implementation and verification notes](docs/DRIVING.md) for protocol, relay configuration and the API.
+Use the locally served HTTP app for the local relay. Access from a remote HTTPS page to a local endpoint depends on browser local-network permissions; secure hosted endpoints should use `wss://`. External sources running in the page can also call `window.driveScene.setSpeedKmh(value)`, alongside `setSuspensionStiffness(value)`, `play()`, `pause()`, `reset()`, `connectSpeedFeed(url)`, `disconnectSpeedFeed()` and `getState()`. No connection is configured automatically. See [the implementation and verification notes](docs/DRIVING.md) for protocol, relay configuration and the API.
 
 ## Scene preview
 

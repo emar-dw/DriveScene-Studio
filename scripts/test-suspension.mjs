@@ -32,6 +32,24 @@ try{
  const braking=await page.evaluate(()=>{__testWorld.renderFrame();return {state:driveScene.getState(),rendered:__poseSample};});assert.ok(braking.rendered.pitch<0);assert.ok(braking.rendered.wheelDelta<1e-7);assert.equal(braking.state.distanceMetres,0);
  await page.locator('#theme-toggle').click();await page.waitForTimeout(500);await shot('braking-driver-dark');
  await page.evaluate(()=>driveScene.play());await page.waitForFunction(()=>driveScene.getState().suspension.pitchDegrees===0,null,{timeout:5000});assert.equal((await page.evaluate(()=>driveScene.getState().distanceMetres)),0);
+ // Sample real playback frames, including the nonlinear peak and controlled return.
+ const responseTraces=await page.evaluate(async()=>{
+  const traces=[];
+  for(const delta of [10,20,40,80]){
+   driveScene.pause();driveScene.reset();driveScene.setSpeedKmh(0);driveScene.play();driveScene.setSpeedKmh(delta);
+   const samples=[],start=performance.now();
+   await new Promise(resolve=>{
+    const sample=now=>{samples.push({seconds:(now-start)/1000,pitch:driveScene.getState().suspension.pitchDegrees});if(now-start<2500)requestAnimationFrame(sample);else resolve();};requestAnimationFrame(sample);
+   });
+   driveScene.pause();traces.push({delta,peak:Math.max(...samples.map(s=>s.pitch)),samples});
+  }
+  return traces;
+ });
+ const peaks=responseTraces.map(t=>t.peak);
+ assert.ok(peaks.every((p,i)=>p>0&&(!i||p>peaks[i-1])));
+ assert.ok(peaks[1]<2*peaks[0]);assert.ok(peaks[2]/peaks[1]<peaks[1]/peaks[0]);assert.ok(peaks[3]/peaks[2]<peaks[2]/peaks[1]);
+ for(const trace of responseTraces){assert.ok(trace.samples.length>30);assert.equal(trace.samples.at(-1).pitch,0);}
+ await writeFile(`${output}/response-traces.json`,JSON.stringify(responseTraces,null,2));
  // Exterior body also pitches; the camera stays outside and the wheels stay planted.
  await page.locator('[data-road=cameraView][data-value=low]').click();await ready();
  await page.evaluate(()=>{driveScene.pause();driveScene.reset();driveScene.setSuspensionStiffness(0);driveScene.setSpeedKmh(60);driveScene.play();driveScene.setSpeedKmh(96);});
@@ -43,5 +61,5 @@ try{
  await page.reload();await ready();assert.equal((await page.evaluate(()=>driveScene.getState().suspension.stiffness)),100);
  await page.evaluate(()=>{driveScene.play();driveScene.setSpeedKmh(36);});await page.waitForTimeout(120);assert.equal((await page.evaluate(()=>driveScene.getState().suspension.pitchDegrees)),0);await page.evaluate(()=>driveScene.pause());
  await page.setViewportSize({width:390,height:844});await page.locator('#theme-toggle').click();await page.waitForTimeout(300);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await shot('mobile-stiffness');
- assert.deepEqual(errors,[]);assert.deepEqual(missing,[]);const results={acceleration,braking,exterior,stiffnessURLRestore:true,rigidSetting:true,settlesAtZeroSpeed:true,errors,missing};await writeFile(`${output}/results.json`,JSON.stringify(results,null,2));console.log(JSON.stringify(results));
+ assert.deepEqual(errors,[]);assert.deepEqual(missing,[]);const results={acceleration,braking,exterior,progressivePeaks:responseTraces.map(({delta,peak})=>({delta,peak})),stiffnessURLRestore:true,rigidSetting:true,settlesAtZeroSpeed:true,errors,missing};await writeFile(`${output}/results.json`,JSON.stringify(results,null,2));console.log(JSON.stringify(results));
 }finally{await browser.close();}

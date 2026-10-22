@@ -15,7 +15,7 @@ export class SuspensionPose {
   const oldAim=aim.clone(),anchor=car.position.clone(),basis=car.quaternion.clone(),inverse=basis.clone().invert();
   const a=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),state.accelerationAngle);
   const b=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),state.brakingAngle);
-  const front=new THREE.Vector3(0,state.pivotHeight,state.accelerationPivotZ),rear=new THREE.Vector3(0,state.pivotHeight,state.brakingPivotZ);
+  const front=new THREE.Vector3(0,state.accelerationPivotHeight,state.accelerationPivotZ),rear=new THREE.Vector3(0,state.brakingPivotHeight,state.brakingPivotZ);
   const offset=front.clone().sub(front.clone().applyQuaternion(a)).applyQuaternion(b).add(rear).sub(rear.clone().applyQuaternion(b));
   const rotation=b.clone().multiply(a),worldRotation=basis.clone().multiply(rotation).multiply(inverse);
   const transform=point=>point.sub(anchor).applyQuaternion(inverse).applyQuaternion(rotation).add(offset).applyQuaternion(basis).add(anchor);

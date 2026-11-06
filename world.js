@@ -2,11 +2,12 @@ import {buildDrivingRoad,updateDrivingRoad} from './driving-road.js';
 import {createDriverView} from './driver-view.js';
 import {SuspensionPose} from './suspension-pose.js';
 import {drivingIds} from './driving.js';
+import {installNeutralDarkSurfaces} from './neutral-surfaces.js';
 import {laneRetireTiming,junctionApproachTiming,previewMotionSettings} from './motion-settings.js';
 import {createStudioEnvironment} from './studio-environment.js';
 import {attachGroundReflection} from './ground-reflection.js?v=139';
 import {createTailLight,updateTailLight} from './tail-light.js';
-import {anchorVehicle} from './framing.js';
+import {anchorVehicle,vehicleFrame} from './framing.js';
 import {buildOutdoorParking} from './outdoor-parking.js';
 import {buildParkingReference} from './parking-reference.js';
 import * as THREE from 'three';
@@ -38,7 +39,7 @@ const ELEVATED_DECK_HEIGHT=8.5;
 
 export class World {
  static async create(canvas,car,options={}){
-  const renderer=new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true,alpha:options.alpha||false});
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:false,preserveDrawingBuffer:true,alpha:options.alpha||false});
   await new Promise(resolve=>setTimeout(resolve,0));
   return new World(canvas,car,{...options,renderer});
  }
@@ -47,7 +48,8 @@ export class World {
   this.palette=palette;this.width=width;this.height=height;this.sceneCache=new Map();this.preparedRoots=new WeakSet();this.geometryTemplates=new Map();this.laneMaterials=new Map();
   this.environmentGrowth={buildings:{value:1,velocity:0},trees:{value:0,velocity:0},waterfront:{value:0,velocity:0},roadworks:{value:0,velocity:0}};
   this.layoutBlend={value:1};this.structurePaintOpacity={value:1};this.waterMix={value:0};this.roadCameraCache=new Map();
-  this.renderer=renderer||new THREE.WebGLRenderer({canvas,antialias:true,preserveDrawingBuffer:true,alpha});
+  // Scene edges are antialiased in the composer's multisampled render target.
+  this.renderer=renderer||new THREE.WebGLRenderer({canvas,antialias:false,preserveDrawingBuffer:true,alpha});
   this.renderer.setPixelRatio(1);this.renderer.setSize(width,height,false);
   this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.VSMShadowMap;this.renderer.shadowMap.autoUpdate=false;
   this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1;
@@ -152,6 +154,8 @@ export class World {
   const coastCompile=this.mat.water.onBeforeCompile;
   this.mat.water.onBeforeCompile=shader=>{coastCompile.call(this.mat.water,shader);shader.fragmentShader=shader.fragmentShader.replace('proximity*valid*reflectionStrength','proximity*valid*reflectionStrength*(1.-waterMix)');};
   for(const kind of ['road','ground','pavement','parkingFloor']){attachGroundReflection(this.mat[kind],this);this.mat[kind].customProgramCacheKey=()=>kind+'-localized-reflection-r15';}
+  installNeutralDarkSurfaces(this);
+  this.reflectionStrength??={value:1};
   // Gradual aerial perspective starts in the middle distance; all far surfaces
   // reach the same horizon color before the geometry ends.
   for(const material of Object.values(this.mat)){
@@ -598,15 +602,15 @@ export class World {
   if(isParking){this.hemi.color.set(dark?'#e5e5e5':'#d9e2eb');this.hemi.groundColor.set(dark?'#717171':'#91969e');this.hemi.intensity=dark?.65:.85;this.sun.color.set(dark?'#eeeeee':'#fff5e8');this.sun.intensity=dark?1.4:2.6;this.fill.color.set(dark?'#cccccc':'#d7e2eb');this.fill.intensity=.35;}
   this.sun.position.set(-38,55+(id==='03'?ELEVATED_DECK_HEIGHT:0),48);this.sun.shadow.intensity=dark?.22:.28;
   const bodyContact=this.egoContact.children[0];bodyContact.scale.y=1;bodyContact.position.z=0;bodyContact.material.uniforms.opacity.value=dark?.30:.38;
+  this.reflectionStrength.value=dark?.18:1;
   this.environmentTone.value=dark?1:0;this.darkAerialPerspective.value=dark?1:0;
-  this.sky.material.uniforms.range.value=dark?.32:.20;this.sky.material.uniforms.top.value.set(dark?'#2d2e30':'#96bde0');this.sky.material.uniforms.bottom.value.set(dark?'#48494b':'#dce5ee');
-  this.scene.fog.color.set(dark?'#48494b':'#dce5ee');this.scene.fog.near=isIndoor?100000:55;this.scene.fog.far=isIndoor?120000:210;this.sky.visible=true;this.scene.background=null;
-  if(dark){
-   this.sky.material.uniforms.range.value=.20;
-   this.sky.material.uniforms.top.value.set('#202225');
-   this.sky.material.uniforms.bottom.value.set('#373a3e');
-   this.scene.fog.color.copy(this.sky.material.uniforms.bottom.value);
-  }
+  // Keep the dark horizon close to the distant asphalt; a wide, low-contrast
+  // sky ramp avoids the former bright gray belt above the vanishing point.
+  this.sky.material.uniforms.range.value=dark?.42:.20;
+  this.sky.material.uniforms.top.value.set(dark?'#202225':'#96bde0');
+  this.sky.material.uniforms.bottom.value.set(dark?'#2b2e32':'#dce5ee');
+  this.scene.fog.color.copy(this.sky.material.uniforms.bottom.value);
+  this.scene.fog.near=isIndoor?100000:55;this.scene.fog.far=isIndoor?120000:210;this.sky.visible=true;this.scene.background=null;
   if(!dark&&this.palette!=='current'){
    const warm=this.palette==='warm';this.hemi.color.set(this.palette==='balanced'?'#cedded':warm?'#ece8e2':'#e2e5e8');this.fill.color.set(this.palette==='balanced'?'#cbdde9':warm?'#e8e4df':'#dfe3e8');
 
@@ -830,6 +834,7 @@ export class World {
   for(const o of this.root.children)if(o.userData.constructionAssembly||o.userData.constructionContact)o.position.z=(o.userData.drivingBaseZ??=o.position.z)+distance%480;
  }
  renderFrame(moving=false){
+  if(this.suspended)return;
   const stats=this.performanceStats,started=stats?performance.now():0;if(stats){this.renderer.info.autoReset=false;this.renderer.info.reset();}
   const {id,mode}=this.state,driver=this.state.cameraView==='driver'&&drivingIds.has(id),vehicle=this.state.vehicle&&!driver,dark=mode==='dark',isParking=parkingIds.includes(id);
   const groundAnchor=this.car.position.clone();
@@ -981,12 +986,15 @@ export class World {
   const tick=now=>{if(this.cameraMotion!==motion||motion.paused)return;const dt=motion.last?Math.min(48,now-motion.last):0;motion.last=now;if(sample(motion.elapsed+dt,dt)){this.finishCameraMotion();return;}motion.frame=requestAnimationFrame(tick);};
   motion.sample=sample;motion.tick=tick;motion.frame=requestAnimationFrame(tick);
  }
- setVehicle(car){
-  this.preparedRoots=new WeakSet();this.reflectionSceneRoot=null;this.roadCameraCache.clear();this.finishLayoutMotion();this.finishEnvironmentMotion();this.stopCameraMotion();
+ setVehicle(car,{disposePrevious=true,preserveScene=false}={}){
+  if(!preserveScene){this.preparedRoots=new WeakSet();this.reflectionSceneRoot=null;this.finishLayoutMotion();this.finishEnvironmentMotion();this.stopCameraMotion();}
+  this.roadCameraCache.clear();
   const previous=this.car;car.position.copy(previous.position);car.rotation.copy(previous.rotation);
-  previous.removeFromParent();this.egoContact.removeFromParent();disposeVehicle(previous);disposeVehicle(this.egoContact);
-  this.car=car;this.scene.add(car);this.egoContact=createContactShadows(car);this.scene.add(this.egoContact);this.vehicleNeedsFraming=true;
+  previous.removeFromParent();this.egoContact.removeFromParent();if(disposePrevious)disposeVehicle(previous);disposeVehicle(this.egoContact);
+  this.car=car;this.scene.add(car);this.egoContact=createContactShadows(car);this.scene.add(this.egoContact);this.vehicleNeedsFraming=!preserveScene;
   this.driving?.suspension.setAxles(car.userData.vehicleSpec?.wheels);
+  this.shadowSceneRoot=null;this.renderer.shadowMap.needsUpdate=true;
+  if(preserveScene){this.framing={...this.framing,vehicleFrame:vehicleFrame(car,this.camera)};return;}
   // Parking replicas depend on the car geometry; road geometry can be retained.
   for(const [key,cached]of this.sceneCache)if(parkingIds.includes(cached.fields.current)){this.disposeSceneRoot(cached.fields.root);this.sceneCache.delete(key);}
   if(parkingIds.includes(this.current))this.current=null;

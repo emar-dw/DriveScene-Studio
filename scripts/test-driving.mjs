@@ -79,10 +79,17 @@ try{
  await page.locator('#theme-toggle').click();await page.waitForFunction(()=>__testWorld.state.mode==='dark');await page.waitForTimeout(500);await shot(page,'highway-driver-dark');
  await page.evaluate(()=>{driveScene.setSpeedKmh(0);driveScene.play();});const stopped=await page.evaluate(()=>driveScene.getState());await page.waitForTimeout(200);assert.equal((await page.evaluate(()=>driveScene.getState())).distanceMetres,stopped.distanceMetres);
  await page.evaluate(()=>{driveScene.setSpeedKmh(100);driveScene.play();});await page.waitForTimeout(150);
- const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#download').click()]);
+ await page.locator('#download').click();
+ const [download]=await Promise.all([page.waitForEvent('download'),page.locator('.export-submit').click()]);
  const png=await readFile(await download.path());assert.equal(png.readUInt32BE(16),1920);assert.equal(png.readUInt32BE(20),1080);assert.ok((await page.evaluate(()=>driveScene.getState())).playing);results.push({export:{width:1920,height:1080,bytes:png.length}});
+ // Upstream's cached vehicle selection must preserve the fork's driving clock and driver view.
+ await page.locator('#vehicle-picker-trigger').click();await page.locator('#vehicle-option-model-3').click();
+ await page.waitForFunction(()=>document.querySelector('#preview').dataset.vehicleModel==='model-3'&&!document.querySelector('#vehicle-picker').open);
+ const switched=await page.evaluate(()=>({state:driveScene.getState(),driver:__testWorld.audit().driverView,carVisible:__testWorld.car.visible}));
+ assert.equal(switched.state.playing,true);assert.equal(switched.state.speedKmh,100);assert.equal(switched.carVisible,false);assert.equal(switched.driver.fov,75);
+ await page.waitForTimeout(200);assert.ok((await page.evaluate(()=>driveScene.getState())).distanceMetres>switched.state.distanceMetres);
  await page.evaluate(()=>driveScene.pause());
- await page.reload();await ready(page);assert.equal((await page.evaluate(()=>__testWorld.state.cameraView)),'driver');assert.equal((await page.evaluate(()=>driveScene.getState())).speedKmh,100);assert.equal(await page.locator('[data-road-preset=highway]').getAttribute('aria-pressed'),'true');
+ await page.reload();await ready(page);assert.equal(await page.locator('#preview').getAttribute('data-vehicle-model'),'model-3');assert.equal((await page.evaluate(()=>__testWorld.state.cameraView)),'driver');assert.equal((await page.evaluate(()=>driveScene.getState())).speedKmh,100);assert.equal(await page.locator('[data-road-preset=highway]').getAttribute('aria-pressed'),'true');
  // Static scenarios retain their existing geometry and suspend driving distance.
  await page.locator('[data-structure=parking]').click();await settled(page,'10');assert.equal(await page.locator('#driving-controls').isVisible(),false);
  await page.evaluate(()=>driveScene.play());const beforeParking=(await page.evaluate(()=>driveScene.getState())).distanceMetres;await page.waitForTimeout(200);assert.equal((await page.evaluate(()=>driveScene.getState())).distanceMetres,beforeParking);

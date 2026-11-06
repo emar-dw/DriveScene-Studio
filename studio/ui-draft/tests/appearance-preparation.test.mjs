@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {installAppearancePreparation} from '../appearance-preparation.js';
+
+test('Appearance preparation yields without allowing live frames and keys warm programs by scene and car while reusing uniform-only theme changes',async()=>{
+ const events=[],world={root:{},car:{uuid:'one'},state:{mode:'light'},initializingScene:false,suspended:false,renderPreparedFrame(){events.push('draw')}};
+ let release;installAppearancePreparation(world,()=>{assert.equal(world.suspended,false);assert.equal(world.initializingScene,true);events.push('record');return new Promise(resolve=>release=resolve)});
+ const run=world.draftPrepareAppearance();assert.equal(world.suspended,true);release();await run;
+ assert.deepEqual(events,['record','draw']);assert.equal(world.initializingScene,false);assert.equal(world.suspended,false);
+ await world.draftPrepareAppearance();assert.equal(events.length,2);
+ world.state.mode='dark';await world.draftPrepareAppearance();assert.equal(events.length,2);
+ for(const change of [()=>world.car={uuid:'two'},()=>world.root={}]){change();const next=world.draftPrepareAppearance();release();await next;}
+ assert.equal(events.length,6);
+});
+
+test('Failed appearance preparation restores prior suspension and remains retryable',async()=>{
+ let fail=true,n=0;const world={root:{},car:{uuid:'one'},state:{mode:'light'},initializingScene:false,suspended:true,renderPreparedFrame(){n++}};
+ installAppearancePreparation(world,async()=>{if(fail)throw Error('warm failure')});
+ await assert.rejects(world.draftPrepareAppearance(),/warm failure/);assert.equal(world.suspended,true);assert.equal(world.initializingScene,false);assert.equal(n,0);
+ fail=false;await world.draftPrepareAppearance();assert.equal(n,1);assert.equal(world.suspended,true);
+});
+
+
+test('A batch warms every model in one pass and restores scene ownership, transforms and visibility',async()=>{
+ const THREE=await import('three'),scene=new THREE.Scene(),parent=new THREE.Group(),active=new THREE.Group(),other=new THREE.Group();
+ scene.add(active);parent.add(other);other.position.set(4,5,6);other.rotation.set(.1,.2,.3);other.visible=false;active.position.set(1,2,3);
+ const before={position:other.position.toArray(),rotation:other.rotation.toArray()},world={scene,root:{},car:active,state:{mode:'light'},initializingScene:false,suspended:true,renderPreparedFrame(){}};
+ let calls=0;installAppearancePreparation(world,async()=>{calls++;assert.equal(other.parent,scene);assert.equal(other.visible,true);assert.deepEqual(other.position.toArray(),active.position.toArray());});
+ await world.draftPrepareAppearances([active,other]);await world.draftPrepareAppearances([active,other]);assert.equal(calls,1);
+ assert.equal(other.parent,parent);assert.equal(other.visible,false);assert.deepEqual(other.position.toArray(),before.position);assert.deepEqual(other.rotation.toArray(),before.rotation);assert.equal(world.suspended,true);
+ world.root={};world.renderPreparedFrame=()=>{throw Error('final draw failed')};await assert.rejects(world.draftPrepareAppearances([active,other]),/final draw failed/);
+ assert.equal(other.parent,parent);world.renderPreparedFrame=()=>{};await world.draftPrepareAppearances([active,other]);assert.equal(calls,3);
+});
+
+test('A newly enabled fleet prepares its materials once before visible use, then reuses them across toggles',async()=>{
+ let preparations=0;const world={root:{},car:{uuid:'ego'},draftTrafficEnabled:false,initializingScene:false,suspended:false,renderPreparedFrame(){}};
+ installAppearancePreparation(world,async()=>{preparations++});await world.draftPrepareAppearance();assert.equal(preparations,1);
+ world.draftTrafficEnabled=true;await world.draftPrepareAppearance();assert.equal(preparations,2);
+ world.draftTrafficEnabled=false;await world.draftPrepareAppearance();world.draftTrafficEnabled=true;await world.draftPrepareAppearance();assert.equal(preparations,2);
+});
+
+
+import {prepareSceneThemes} from '../appearance-preparation.js';
+test('New scene theme preparation draws both shader endpoints and restores the selected state',()=>{
+ const draws=[],original={id:'05',mode:'light',laneCount:6},world={state:original,draftThemeTone:{value:0},suspended:true,update(state){this.state=state},renderPreparedFrame(){draws.push([this.state.mode,this.draftThemeTone.value])}};
+ prepareSceneThemes(world);assert.deepEqual(draws,[['dark',1],['light',0]]);assert.deepEqual(world.state,original);assert.equal(world.suspended,true);
+});
+test('A failed alternate-theme preparation still restores mode and material tone',()=>{
+ const world={state:{id:'08',mode:'dark'},draftThemeTone:{value:1},update(state){this.state=state},renderPreparedFrame(){throw Error('draw failed')}};
+ assert.throws(()=>prepareSceneThemes(world),/draw failed/);assert.equal(world.state.mode,'dark');assert.equal(world.draftThemeTone.value,1);
+});

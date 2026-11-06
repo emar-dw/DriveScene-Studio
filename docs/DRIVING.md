@@ -1,5 +1,17 @@
 # Driving implementation
 
+## Upstream sync, 6 November 2026
+
+The fork includes upstream through `4da3a2e` (132 new commits). Interactive driving remains at `/`; upstream's new workbench is available at `/studio/ui-draft/`. Both entry points use local assets. The fork's speed API, WebSocket feed, Driver camera, Highway layout and suspension remain in the root app. The upstream workbench keeps its own Assist, traffic and export features.
+
+The root app also includes upstream's recoverable startup, cached vehicle selection, rendering refinements and export dialog. Switching vehicle models keeps speed, playback and Driver view. Export suspends driving while capturing the scene, then resumes the selected playback state. A lost rendering context stops distance accumulation.
+
+Verification: root build and 63 unit tests; upstream workbench build and 548 tests; browser driving, suspension and WebSocket/relay suites; all 26 upstream layout gap checks. Browser checks cover desktop/mobile, both themes, 100 km of bounded recycling, changing vehicles during playback, exports and URL restore. No page errors or missing assets were reported by the driving suites.
+
+The report-only upstream visual audit reported one phone/light Export-label contrast finding. The workbench files match upstream exactly; its audit sampled below-viewport label coordinates at the screenshot edge, so this is not confirmed as a visible regression. Hosted deployment was not part of local validation.
+
+The imported design-system gate predates neither fork's existing UI. During this initial sync, `scripts/check-sync-ui.mjs` compares findings with both the old fork and the pinned upstream commit; only findings new to both fail. A deliberately injected invalid length was correctly rejected. Once the base branch contains the design-system submodule, the normal upstream checker runs without the extra baseline. The submodule and upstream workbench were not modified.
+
 ## Implementation plan — completed
 
 1. Add a speed controller that integrates physical distance and supports Play/Pause, Reset and lifecycle suspension.

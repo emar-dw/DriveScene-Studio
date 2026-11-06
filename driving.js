@@ -11,10 +11,10 @@ export class Driving {
  constructor(world,{speed=60,stiffness=50,onChange=()=>{}}={}){this.world=world;this.speed=normalizeSpeed(speed);this.suspension=new Suspension(stiffness);this.suspension.setAxles(world.car?.userData.vehicleSpec?.wheels);this.pendingDelta=0;this.playing=false;this.distance=0;this.last=null;this.frame=0;this.suspensions=new Set();this.onChange=onChange;this.tick=this.tick.bind(this);}
  get suspended(){return this.suspensions.size>0;}
  get supported(){return drivingIds.has(this.world.state?.id);}
- get running(){return this.playing&&this.speed>0&&this.supported&&!this.suspended&&!document.hidden&&!this.world.initializingScene;}
- get animating(){return this.playing&&this.supported&&!this.suspended&&!document.hidden&&!this.world.initializingScene&&(this.speed>0||this.suspension.active||this.pendingDelta!==0);}
+ get running(){return this.playing&&this.speed>0&&this.supported&&!this.suspended&&!document.hidden&&!this.world.initializingScene&&!this.world.suspended;}
+ get animating(){return this.playing&&this.supported&&!this.suspended&&!document.hidden&&!this.world.initializingScene&&!this.world.suspended&&(this.speed>0||this.suspension.active||this.pendingDelta!==0);}
  // Continuous input preserves the frame clock; sync() resets it when stopped.
- setSpeed(value){const speed=normalizeSpeed(value);if(this.playing&&this.supported&&!this.suspended&&!document.hidden&&!this.world.initializingScene)this.pendingDelta+=speed-this.speed;this.speed=speed;this.sync();return this.speed;}
+ setSpeed(value){const speed=normalizeSpeed(value);if(this.playing&&this.supported&&!this.suspended&&!document.hidden&&!this.world.initializingScene&&!this.world.suspended)this.pendingDelta+=speed-this.speed;this.speed=speed;this.sync();return this.speed;}
  setSuspensionStiffness(value){const stiffness=this.suspension.setStiffness(value);if(this.world.state)this.world.renderFrame();this.sync();return stiffness;}
  play(){this.playing=true;this.last=null;this.sync();}
  pause(){this.playing=false;this.last=null;this.sync();}

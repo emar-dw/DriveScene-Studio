@@ -54,6 +54,7 @@ test('distance follows speed and elapsed time, with pause, reset and scene suspe
  drive.suspend(false);drive.tick(12000);drive.tick(12050);assert.equal(drive.distance,26.5);
  document.hidden=true;drive.tick(20000);assert.equal(drive.distance,26.5);
  document.hidden=false;drive.tick(21000);assert.equal(drive.distance,26.5);
+ world.suspended=true;drive.sync();assert.equal(drive.running,false);assert.equal(drive.animating,false);drive.tick(21500);assert.equal(drive.distance,26.5);world.suspended=false;
  world.state.id='10';drive.tick(22000);assert.equal(drive.distance,26.5);
  world.state.id='20';drive.setSpeed(0);drive.tick(23000);assert.equal(drive.distance,26.5);
  drive.setSpeed(36);drive.suspend(true,'credits');drive.suspend(true,'export');drive.suspend(false,'export');assert.equal(drive.running,false);drive.suspend(false,'credits');assert.equal(drive.running,true);

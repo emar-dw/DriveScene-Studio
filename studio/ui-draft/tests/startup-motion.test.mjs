@@ -1,0 +1,90 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {beginStartup,pendingFade,readyFade} from '../startup-motion.js';
+function setup(reduce=false,warm=false,started=150,compact=false){
+ const marks=[],motions=[],writes=[],node=()=>({dataset:{},values:{},style:{setProperty(key,value){this.owner.values[key]=value}}});
+ const nodes=Array.from({length:27},()=>{const n=node();n.style.owner=n;return n});
+ const surface={animate(frames,options){const motion={frames,options,currentTime:0,played:0,paused:0,cancelled:0,effect:{setKeyframes(value){motion.frames=value},updateTiming(value){Object.assign(motion.options,value)}},pause(){motion.paused++},play(){motion.played++},cancel(){motion.cancelled++}};motions.push(motion);return motion}},inspector={inert:false},root={dataset:{startup:warm?'warm':'controls'}};
+ const doc={documentElement:root,getElementById:id=>id==='startup-surface'?surface:id==='inspector-scroll'?inspector:{},querySelectorAll:selector=>selector.startsWith('#scene-nav')?nodes.slice(0,9):nodes.slice(9),defaultView:{matchMedia:()=>({matches:reduce}),__draftStartupSessionKey:'session-test',sessionStorage:{setItem:(key,value)=>writes.push([key,value])}}};
+ const lifecycle=beginStartup({doc,clock:{now:()=>started,mark:name=>marks.push(name)},compact});
+ return {lifecycle,surface,inspector,root,nodes,marks,motions,writes,motion:motions[0]};
+}
+test('Sidebars and the scene fade start together while readiness is pending',()=>{
+ const s=setup();assert.equal(s.root.dataset.startup,'controls');assert.equal(s.inspector.inert,true);
+ assert.equal(s.nodes[1].values['--startup-delay'],'40.5ms');assert.equal(s.nodes[10].values['--startup-delay'],'27ms');
+ assert.equal(s.motions.length,1);assert.equal(s.marks.includes('draft-startup-fade'),true);
+ const frames=s.motion.frames;assert.equal(frames[0].opacity,.1);assert.ok(frames[1].opacity>.1);
+ assert.ok(frames.every((f,i)=>!i||f.opacity>frames[i-1].opacity));
+});
+test('Ready handoff keeps the same animation, current time and opacity',()=>{
+ for(const elapsed of [0,450,1800,3500,8000,29000]){
+  const s=setup(),m=s.motion;m.currentTime=elapsed;s.lifecycle.reveal();
+  assert.equal(s.root.dataset.startup,'revealing');assert.equal(s.inspector.inert,true);
+  assert.equal(s.motions.length,1);assert.equal(m.currentTime,elapsed);assert.equal(m.cancelled,0);
+  const join=m.frames.find(f=>Math.abs(f.offset*m.options.duration-elapsed)<1e-7);
+  assert.equal(join.opacity,pendingFade(elapsed).opacity);
+  assert.equal(m.frames.at(-1).opacity,1);
+  assert.ok(m.frames.every((f,i)=>!i||f.opacity>=m.frames[i-1].opacity));
+  s.lifecycle.reveal();assert.equal(m.currentTime,elapsed);m.onfinish();assert.equal(m.cancelled,1);
+ }
+});
+test('Normal and delayed completion preserve opacity and velocity without a reverse frame',()=>{
+ for(let elapsed=0;elapsed<=30000;elapsed+=50){
+  const p=pendingFade(elapsed),tail=readyFade(elapsed),h=.01;
+  assert.equal(tail.at(0),p.opacity);assert.ok(Math.abs(tail.at(tail.duration)-1)<1e-12);
+  const velocity=(tail.at(h)-tail.at(0))/h;
+  assert.ok(Math.abs(velocity-p.velocity)<1e-6);
+  let prior=p.opacity;
+  for(let i=1;i<=200;i++){const value=tail.at(tail.duration*i/200);assert.ok(value>=prior-1e-12&&value<=1+1e-12);prior=value}
+ }
+});
+test('Slow loading advances from the start and extends completion without holding at 10 percent',()=>{
+ const s=setup(),m=s.motion;assert.ok(pendingFade(8000).opacity>pendingFade(4000).opacity);
+ m.currentTime=8000;s.lifecycle.reveal();assert.ok(m.options.duration>8000);assert.equal(m.paused,0);assert.equal(m.played,0);
+});
+test('Reduced motion and returning documents wait for readiness without a repeated fade',()=>{
+ const reduced=setup(true);assert.equal(reduced.motions.length,0);reduced.lifecycle.reveal();assert.equal(reduced.root.dataset.startup,undefined);
+ const warm=setup(false,true);assert.equal(warm.motions.length,0);assert.equal(warm.root.dataset.startup,'warm');assert.equal(warm.inspector.inert,true);assert.deepEqual(warm.writes,[]);warm.lifecycle.reveal();assert.equal(warm.root.dataset.startup,undefined);assert.equal(warm.inspector.inert,false);assert.deepEqual(warm.writes,[['session-test','ready']]);
+});
+test('Compact entry waits for a prepared scene without scheduling stagger or fade',async()=>{
+ const s=setup(false,false,150,true);
+ assert.equal(s.inspector.inert,false);
+ assert.equal(s.motions.length,0);
+ assert.ok(s.nodes.every(node=>!node.dataset.startupControl));
+ assert.deepEqual(s.writes,[]);
+ s.root.dataset.startupControlsReady='';
+ s.lifecycle.reveal();await s.lifecycle.finished;
+ assert.equal(s.inspector.inert,false);
+ assert.equal(s.root.dataset.startupControlsReady,undefined);
+ assert.deepEqual(s.writes,[['session-test','ready']]);
+});
+test('Failure clears pending or active animation without marking a pending session ready',()=>{
+ const failed=setup();failed.lifecycle.abort();failed.lifecycle.reveal();assert.deepEqual(failed.writes,[]);assert.equal(failed.motions.length,1);assert.equal(failed.motion.cancelled,1);assert.equal(failed.inspector.inert,false);
+ const active=setup();active.lifecycle.reveal();active.lifecycle.abort();assert.equal(active.motions[0].cancelled,1);assert.equal(active.root.dataset.startup,undefined);
+});
+test('Only a successful ready handoff marks the session',()=>{
+ const s=setup();assert.deepEqual(s.writes,[]);s.lifecycle.reveal();assert.deepEqual(s.writes,[]);s.motion.onfinish();assert.deepEqual(s.writes,[['session-test','ready']]);
+});
+
+test('Pending placeholder stays faint until the renderer is ready',()=>{
+ for(let t=0;t<=120000;t+=250)assert.ok(pendingFade(t).opacity<=.34+1e-12);
+ assert.ok(Math.abs(pendingFade(1760).opacity-.3)<1e-12);
+ for(const ready of [0,600,1760,5000,30000]){const tail=readyFade(ready);assert.equal(tail.duration,720);assert.ok(Math.abs(tail.at(720)-1)<1e-12);}
+});
+
+test('Parser and module startup time count toward the navigation budget without changing speed at readiness',()=>{
+ for(const started of [0,150,400,575,900]){
+  const s=setup(false,false,started),m=s.motion,rate=m.playbackRate;
+  const readyAt=1900,elapsed=(readyAt-started)*rate;
+  m.currentTime=elapsed;s.lifecycle.reveal();
+  assert.equal(m.playbackRate,rate);assert.ok(Math.abs(m.options.duration-elapsed-720)<1e-7);
+  assert.equal(m.frames[0].opacity,.1);assert.equal(m.frames.at(-1).opacity,1);
+ }
+});
+
+test('An arbitrarily slow load cannot resolve the completion promise or mark the session ready',async()=>{
+ const s=setup();let finished=false;s.lifecycle.finished.then(()=>finished=true);
+ for(const elapsed of [2000,8000,30000,120000]){assert.ok(pendingFade(elapsed).opacity<1);s.motion.currentTime=elapsed;}
+ await Promise.resolve();assert.equal(finished,false);assert.deepEqual(s.writes,[]);assert.equal(s.inspector.inert,true);
+ s.lifecycle.reveal();await Promise.resolve();assert.equal(finished,false);s.motion.onfinish();await s.lifecycle.finished;assert.equal(finished,true);
+});

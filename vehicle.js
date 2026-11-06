@@ -3,19 +3,15 @@ import frameHulls from './vehicle-frame-hull.js';
 import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {RoundedBoxGeometry} from './RoundedBoxGeometry.js';
+import {fetchAsset,takePrefetched} from './asset-request.js';
+import {neutralizePlate} from './vehicle-library/three/neutral-plate.js';
+import {prepareFrontGrilles} from './vehicle-library/three/grille-materials.js?v=grille-14';
 // Prepared exterior: fixed geometry/material edits are baked once for delivery.
 // Keep createSourceVehicle below as the reproducible source preparation step.
 let decodingWorkersReady=false;
 export async function createVehicle({startup=false}={}){
  if(!decodingWorkersReady&&typeof Worker!=='undefined'){decodingWorkersReady=true;try{MeshoptDecoder.useWorkers(Math.min(2,Math.max(1,(navigator.hardwareConcurrency||2)-1)));}catch{MeshoptDecoder.useWorkers(0);}}
- let compressed;
- if(!startup&&globalThis.__fullVehicleRequest){compressed=await globalThis.__fullVehicleRequest;delete globalThis.__fullVehicleRequest;}
- else if(startup&&globalThis.__startupVehicleRequest){compressed=await globalThis.__startupVehicleRequest;delete globalThis.__startupVehicleRequest;}
- else{
-  const response=await fetch(new URL(startup?'./ego-vehicle-startup.glb.gz?v=17.9':'./ego-vehicle-ready.glb.gz',import.meta.url),{priority:startup?'high':'low'});
-  if(!response.ok)throw Error('Vehicle asset failed to load');
-  compressed=await response.arrayBuffer();
- }
+ const compressed=await takePrefetched(startup?'__startupVehicleRequest':'__fullVehicleRequest',()=>fetchAsset(new URL(startup?'./ego-vehicle-startup.glb.gz?v=17.9':'./ego-vehicle-ready.glb.gz?v=17.9',import.meta.url)));
  const bytes=await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
  const gltf=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(bytes,'');
  const root=gltf.scene.children[0];
@@ -23,6 +19,7 @@ export async function createVehicle({startup=false}={}){
  let frameIndex=0;
  root.traverse(o=>{if(!o.isMesh)return;const hull=frameHulls[frameIndex++];if(!startup&&hull?.name===o.name&&hull.count===o.geometry.attributes.position.count&&hull.indices?.length)o.geometry.userData.frameIndices=hull.indices;o.castShadow=true;o.receiveShadow=false;
   for(const m of (Array.isArray(o.material)?o.material:[o.material])){
+   if(m.name==='license')neutralizePlate(m);
    if(m.name==='body'){m.roughness=Math.max(m.roughness,.24);m.clearcoatRoughness=Math.max(m.clearcoatRoughness,.22);}
    if(m.name==='lights'){
    // Vertex color encodes the original rear/front separation. Unlike source
@@ -31,7 +28,7 @@ export async function createVehicle({startup=false}={}){
    m.needsUpdate=true;
   }
 
-  } });return root;
+  } });prepareFrontGrilles(root,'x6');return root;
 }
 
 export async function createSourceVehicle(){

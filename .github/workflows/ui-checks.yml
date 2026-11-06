@@ -31,7 +31,7 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then BASE="origin/${{ github.base_ref }}";
           elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then BASE="${{ github.event.before }}";
           else BASE="HEAD~1"; fi
-          node design-system/checks/check-changed.mjs --base "$BASE"
+          node scripts/check-sync-ui.mjs "$BASE"
 
   keypage:
     name: keypage
